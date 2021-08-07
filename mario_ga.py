@@ -37,6 +37,8 @@ def kill_process(path: str):
 
 
 def clean_fceux():
+    kill_process('/usr/local/bin/fceux')
+    kill_process('/usr/local/Cellar/fceux/2.4.0/libexec/fceux')
     kill_process('/opt/homebrew/bin/fceux')
     kill_process('/opt/homebrew/Cellar/fceux/2.4.0/libexec/fceux')
 
