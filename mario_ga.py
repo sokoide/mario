@@ -186,7 +186,7 @@ def main():
         return
 
     while True:
-        print('* generation: {}'.format(gen))
+        print('[{}] * generation: {}'.format(time.strftime('%H:%M:%S'), gen))
         for gene in genes:
             if gene['score'] > 0:
                 print('result: {} (prev)'.format(gene['score']))
