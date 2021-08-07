@@ -4,7 +4,6 @@ import numpy as np
 import signal
 import os
 import time
-from multiprocessing import Lock
 
 
 def kill_process(path: str):
