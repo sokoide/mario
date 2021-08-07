@@ -153,16 +153,18 @@ def parse_args():
                         help='start from the generation')
     parser.add_argument('--replay', action=argparse.BooleanOptionalAction,
                         help='replay the best one in the generation')
+    parser.add_argument('--stage', dest='stage', type=str, default='ppaquette/SuperMarioBros-1-1-v0',
+                        help='stage')
     args = parser.parse_args()
     return args
 
 
-def replay():
+def replay(args):
     l = sorted(genes, key=lambda k: k['score'])
     first = l[-1]
     print(first)
     print('len:{}'.format(len(first['gene'])))
-    env = gym.make('ppaquette/SuperMarioBros-1-1-v0')
+    env = gym.make(args.stage)
     score = play_mario(env, first['gene'])
     print('result: {}'.format(score))
     clean_fceux()
@@ -185,7 +187,7 @@ def main():
             genes.append({'gene': make_random_gene(NUM_STEPS), 'score': 0})
 
     if args.replay:
-        replay()
+        replay(args)
         return
 
     while True:
@@ -195,7 +197,7 @@ def main():
                 print('result: {} (prev)'.format(gene['score']))
                 continue
             # recreate env every episode to avoid 5-7 second dealy at start up after Mario is killed by Kuribo
-            env = gym.make('ppaquette/SuperMarioBros-1-1-v0')
+            env = gym.make(args.stage)
             gene['score'] = play_mario(env, gene['gene'])
             print('result: {}'.format(gene['score']))
             clean_fceux()
