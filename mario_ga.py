@@ -145,15 +145,15 @@ def load_genes(gen, steps):
     genes = new_genes
 
 
-
 def parse_args():
     parser = argparse.ArgumentParser(description='GA Mario resolver')
-    parser.add_argument('--gen', dest='gen', type=int, default=1,
+    parser.add_argument('--gen', dest='gen', type=int, default=0,
                         help='start from the generation')
     parser.add_argument('--replay', action=argparse.BooleanOptionalAction,
                         help='replay the best one in the generation')
     args = parser.parse_args()
     return args
+
 
 def replay():
     l = sorted(genes, key=lambda k: k['score'])
@@ -161,10 +161,11 @@ def replay():
     print(first)
     print('len:{}'.format(len(first['gene'])))
     env = gym.make('ppaquette/SuperMarioBros-1-1-v0')
-    score  = play_mario(env, first['gene'])
+    score = play_mario(env, first['gene'])
     print('result: {}'.format(score))
     clean_fceux()
     env.close()
+
 
 def main():
     global genes
@@ -175,8 +176,8 @@ def main():
     args = parse_args()
 
     gen = args.gen
-    if gen > 1:
-        load_genes(gen-1, NUM_STEPS)
+    if gen > 0:
+        load_genes(gen, NUM_STEPS)
     else:
         for i in range(NUM_GENES):
             genes.append({'gene': make_random_gene(NUM_STEPS), 'score': 0})
