@@ -49,6 +49,7 @@ def make_random_gene(steps):
 
 
 def play_mario(env, gene):
+    # returns (score, cleared)
     FRAMES = 4
     score = 0
     observation = env.reset()
@@ -57,10 +58,13 @@ def play_mario(env, gene):
         for i in range(FRAMES):
             action = actions[action_id]
             observation, reward, done, info = env.step(action)
+            # print('r:{}, d:{}, i:{}'.format(reward, done, info))
             score = max(score, info['distance'])
-            if done:
-                return score
-    return score
+            if done and info['life'] == 0:
+                return (score, False)
+            elif done:
+                return (score, True)
+    return (score, False)
 
 
 def print_generation_result(gen: int):
@@ -152,8 +156,8 @@ def replay(args):
     print(first)
     print('len:{}'.format(len(first['gene'])))
     env = gym.make(args.stage)
-    score = play_mario(env, first['gene'])
-    print('result: {}'.format(score))
+    score, cleared = play_mario(env, first['gene'])
+    print('score: {}, cleared: {}'.format(score, cleared))
     clean_fceux()
     env.close()
 
@@ -172,14 +176,15 @@ def main():
     else:
         for i in range(NUM_GENES):
             genes.append({'gene': make_random_gene(NUM_STEPS), 'score': 0})
-    if gen <=0:
+    if gen <= 0:
         gen = 1
 
     if args.replay:
         replay(args)
         return
 
-    while True:
+    cleared = False
+    while cleared == False:
         print('[{}] * generation: {}'.format(time.strftime('%H:%M:%S'), gen))
         for gene in genes:
             if gene['score'] > 0:
@@ -187,8 +192,8 @@ def main():
                 continue
             # recreate env every episode to avoid 5-7 second dealy at start up after Mario is killed by Kuribo
             env = gym.make(args.stage)
-            gene['score'] = play_mario(env, gene['gene'])
-            print('result: {}'.format(gene['score']))
+            gene['score'], cleared = play_mario(env, gene['gene'])
+            print('score: {}, cleared: {}'.format(gene['score'], cleared))
             clean_fceux()
             env.close()
         print_generation_result(gen)
