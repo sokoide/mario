@@ -6,6 +6,7 @@ import os
 import time
 import pickle
 import copy
+import argparse
 
 # global
 genes = []
@@ -99,7 +100,7 @@ def change_generation():
 
     # cross over the 1st and 2nd
     for i in range(len(genes)-len(new_genes)):
-        p = np.random.randint(0, len(first['gene'])//2)
+        p = np.random.randint(0, len(first['gene']))
         # s1 = genes[np.random.randint(0, len(genes))]
         # s2 = genes[np.random.randint(0, len(genes))]
         s1 = first
@@ -131,21 +132,31 @@ def load_genes(gen):
         genes = pickle.load(tf)
 
 
+def parse_args():
+    parser = argparse.ArgumentParser(description='GA Mario resolver')
+    parser.add_argument('--gen', dest='gen', type=int, default=1,
+                        help='start generation')
+    args = parser.parse_args()
+    return args
+
+
 def main():
     global genes
-
     NUM_GENES = 10
-    gen = 1
 
-    for i in range(NUM_GENES):
-        genes.append({'gene': make_random_gene(1000), 'score': 0})
+    args = parse_args()
+    gen = args.gen
+    if gen > 1:
+        load_genes(gen)
+    else:
+        for i in range(NUM_GENES):
+            genes.append({'gene': make_random_gene(1000), 'score': 0})
 
     while True:
         print('* generation: {}'.format(gen))
         for gene in genes:
-            # the best one is not mutated and already has the score
             if gene['score'] > 0:
-                print('result: {}'.format(gene['score']))
+                print('result: {} (prev)'.format(gene['score']))
                 continue
             # recreate env every episode to avoid 5-7 second dealy at start up after Mario is killed by Kuribo
             env = gym.make('ppaquette/SuperMarioBros-1-1-v0')
