@@ -144,7 +144,7 @@ def parse_args():
                         help='start from the generation')
     parser.add_argument('--replay', action=argparse.BooleanOptionalAction,
                         help='replay the best one in the generation')
-    parser.add_argument('--stage', dest='stage', type=str, default='ppaquette/SuperMarioBros-1-1-v0',
+    parser.add_argument('--stage', dest='stage', type=str, default='ppaquette/SuperMarioBros-1-1-Tiles-v0',
                         help='stage')
     args = parser.parse_args()
     return args
