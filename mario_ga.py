@@ -28,8 +28,6 @@ actions = [
 def kill_process(path: str):
     for line in os.popen("ps -ef | grep '{}' | grep -v grep".format(path)):
         pid = int(line.split()[1])
-        # print(line)
-        # print('kill -9 {}'.format(pid))
         try:
             os.kill(pid, signal.SIGKILL)
         except:
@@ -57,16 +55,8 @@ def play_mario(env, gene):
 
     for action_id in gene:
         for i in range(FRAMES):
-            # action = np.random.randint(0, 1+1, 6)
-            # action = [0, 0, 0, 1, 0, 1]
-            # action = get_action()
             action = actions[action_id]
             observation, reward, done, info = env.step(action)
-            # print("action=", action)
-            # print("observation=", observation)
-            # print("reward=", reward)
-            # print("done=", done)
-            # print("info=", info)
             score = max(score, info['distance'])
             if done:
                 return score
@@ -77,7 +67,6 @@ def print_generation_result(gen: int):
     l = sorted(genes, key=lambda k: k['score'])
     first = l[-1]
     print('* best score: {}'.format(first['score']))
-    # print('* genes: {}'.format(genes))
 
 
 def change_generation():
@@ -104,8 +93,6 @@ def change_generation():
     # cross over
     for i in range(len(genes)-len(new_genes)):
         p = np.random.randint(0, len(first['gene']))
-        # s1 = first
-        # s2 = second
         r = np.random.randint(1, 5)
         r2 = np.random.randint(1, 5)
         s1 = l[-1 * r]
@@ -185,6 +172,8 @@ def main():
     else:
         for i in range(NUM_GENES):
             genes.append({'gene': make_random_gene(NUM_STEPS), 'score': 0})
+    if gen <=0:
+        gen = 1
 
     if args.replay:
         replay(args)
