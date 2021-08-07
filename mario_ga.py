@@ -87,35 +87,37 @@ def change_generation():
 
     new_genes = []
 
-    # keep the best and 2nd ones
+    # keep the best X
     new_genes.append(first)
     new_genes.append(second)
 
     # mutate the best one
-    new_gene = copy.deepcopy(first['gene'])
-    for i in range(0, len(new_gene)//100):
-        r = np.random.randint(0, len(new_gene))
-        new_gene[r] = np.random.randint(0, len(actions))
-    new_genes.append({'gene': new_gene, 'score': 0})
+    for i in range(2):
+        new_gene = copy.deepcopy(first['gene'])
+        for i in range(0, len(new_gene)//100):
+            r = np.random.randint(0, len(new_gene))
+            new_gene[r] = np.random.randint(0, len(actions))
+        new_genes.append({'gene': new_gene, 'score': 0})
 
-    # cross over the 1st and 2nd
+    # cross over
     for i in range(len(genes)-len(new_genes)):
         p = np.random.randint(0, len(first['gene']))
-        # s1 = genes[np.random.randint(0, len(genes))]
-        # s2 = genes[np.random.randint(0, len(genes))]
-        s1 = first
-        s2 = second
+        # s1 = first
+        # s2 = second
+        r = np.random.randint(1, 5)
+        r2 = np.random.randint(1, 5)
+        s1 = l[-1 * r]
+        s2 = l[-1 * r2]
         new_gene = s1['gene'][:p] + s2['gene'][p:]
         new_genes.append({'gene': new_gene, 'score': 0})
 
-    # mutete from the 3rd one to the last
+    # mutete
     for i in range(3, len(new_genes)):
         gene = new_genes[i]['gene']
         for j in range(0, len(gene)//100):
             r = np.random.randint(0, len(gene))
             gene[r] = np.random.randint(0, len(actions))
     genes = new_genes
-    # print('* new genes: {}'.format(genes))
 
 
 def save_genes(gen):
@@ -124,33 +126,64 @@ def save_genes(gen):
         pickle.dump(genes, tf)
 
 
-def load_genes(gen):
+def load_genes(gen, steps):
     global genes
 
     filepath = 'gene%04d.pkl' % gen
     with open(filepath, 'rb') as tf:
-        genes = pickle.load(tf)
+        new_genes = pickle.load(tf)
+
+    for new_gene in new_genes:
+        if len(new_gene['gene']) < steps:
+            # add spteps
+            for i in range(steps - len(new_gene['gene'])):
+                new_gene['gene'].append(np.random.randint(0, len(actions)))
+            new_gene['score'] = 0
+        elif len(new_gene['gene']) > steps:
+            new_gene['gene'] = new_gene['gene'][:steps]
+            new_gene['score'] = 0
+    genes = new_genes
+
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description='GA Mario resolver')
     parser.add_argument('--gen', dest='gen', type=int, default=1,
-                        help='start generation')
+                        help='start from the generation')
+    parser.add_argument('--replay', action=argparse.BooleanOptionalAction,
+                        help='replay the best one in the generation')
     args = parser.parse_args()
     return args
 
+def replay():
+    l = sorted(genes, key=lambda k: k['score'])
+    first = l[-1]
+    print(first)
+    print('len:{}'.format(len(first['gene'])))
+    env = gym.make('ppaquette/SuperMarioBros-1-1-v0')
+    score  = play_mario(env, first['gene'])
+    print('result: {}'.format(score))
+    clean_fceux()
+    env.close()
 
 def main():
     global genes
     NUM_GENES = 10
+    # 1000 steps == 400 TIME periods in Mario
+    NUM_STEPS = 1000
 
     args = parse_args()
+
     gen = args.gen
     if gen > 1:
-        load_genes(gen)
+        load_genes(gen-1, NUM_STEPS)
     else:
         for i in range(NUM_GENES):
-            genes.append({'gene': make_random_gene(1000), 'score': 0})
+            genes.append({'gene': make_random_gene(NUM_STEPS), 'score': 0})
+
+    if args.replay:
+        replay()
+        return
 
     while True:
         print('* generation: {}'.format(gen))
