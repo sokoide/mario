@@ -35,10 +35,9 @@ def kill_process(path: str):
 
 
 def clean_fceux():
-    kill_process('/usr/local/bin/fceux')
-    kill_process('/usr/local/Cellar/fceux/2.4.0/libexec/fceux')
-    kill_process('/opt/homebrew/bin/fceux')
-    kill_process('/opt/homebrew/Cellar/fceux/2.4.0/libexec/fceux')
+    hb_prefix = os.getenv('HOMEBREW_PREFIX', '/usr/local')
+    kill_process(os.path.join(hb_prefix, 'bin/fceux'))
+    kill_process(os.path.join(hb_prefix, 'Cellar/fceux/2.4.0/libexec/fceux'))
 
 
 def make_random_gene(steps):
@@ -144,8 +143,10 @@ def parse_args():
                         help='start from the generation')
     parser.add_argument('--replay', action=argparse.BooleanOptionalAction,
                         help='replay the best one in the generation')
+    parser.add_argument('--kill', action=argparse.BooleanOptionalAction,
+                        help='kill fceux processes')
     parser.add_argument('--stage', dest='stage', type=str, default='ppaquette/SuperMarioBros-1-1-Tiles-v0',
-                        help='stage')
+                        help='stage (default: ppaquette/SuperMarioBros-1-1-Tiles-v0 )')
     args = parser.parse_args()
     return args
 
@@ -170,6 +171,10 @@ def main():
 
     args = parse_args()
 
+    if args.kill:
+        clean_fceux()
+        return
+
     gen = args.gen
     if gen > 0:
         load_genes(gen, NUM_STEPS)
@@ -179,27 +184,30 @@ def main():
     if gen <= 0:
         gen = 1
 
-    if args.replay:
-        replay(args)
-        return
+    try:
+        if args.replay:
+            replay(args)
+            return
 
-    cleared = False
-    while cleared == False:
-        print('[{}] * generation: {}'.format(time.strftime('%H:%M:%S'), gen))
-        for gene in genes:
-            if gene['score'] > 0:
-                print('result: {} (prev)'.format(gene['score']))
-                continue
-            # recreate env every episode to avoid 5-7 second dealy at start up after Mario is killed by Kuribo
-            env = gym.make(args.stage)
-            gene['score'], cleared = play_mario(env, gene['gene'])
-            print('score: {}, cleared: {}'.format(gene['score'], cleared))
-            clean_fceux()
-            env.close()
-        print_generation_result(gen)
-        save_genes(gen)
-        change_generation()
-        gen += 1
+        cleared = False
+        while cleared == False:
+            print('[{}] * generation: {}'.format(time.strftime('%H:%M:%S'), gen))
+            for gene in genes:
+                if gene['score'] > 0:
+                    print('result: {} (prev)'.format(gene['score']))
+                    continue
+                # recreate env every episode to avoid 5-7 second dealy at start up after Mario is killed by Kuribo
+                env = gym.make(args.stage)
+                gene['score'], cleared = play_mario(env, gene['gene'])
+                print('score: {}, cleared: {}'.format(gene['score'], cleared))
+                clean_fceux()
+                env.close()
+            print_generation_result(gen)
+            save_genes(gen)
+            change_generation()
+            gen += 1
+    except KeyboardInterrupt:
+        clean_fceux()
 
 
 if __name__ == '__main__':
