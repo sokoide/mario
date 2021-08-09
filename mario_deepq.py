@@ -44,13 +44,13 @@ class EnvironmentSimulator(py_environment.PyEnvironment):
         # state
         # 0: empty, 1: wall, 2: enemy, 3: mario
         self._observation_spec = array_spec.BoundedArraySpec(
-            shape=(16,13,1), dtype=np.float32, minimum=0, maximum=3
+            shape=(13, 16, 1), dtype=np.float32, minimum=0, maximum=3
         )
         # action
         self._action_spec = array_spec.BoundedArraySpec(
             shape=(), dtype=np.int32, minimum=0, maximum=len(actions)-1
         )
-        self._screen = np.zeros(shape=(16,13,1), dtype=np.float32)
+        self._screen = np.zeros(shape=(13, 16, 1), dtype=np.float32)
         self._args = args
         self._gym_env = None
         self._reset()
@@ -68,8 +68,7 @@ class EnvironmentSimulator(py_environment.PyEnvironment):
         self._gym_env = gym.make(self._args.stage)
         self._gym_env.reset()
 
-        self._state = [0,1,2,3,4,5] # not used
-        return ts.restart(np.array(self._screen, dtype=np.float32))
+        return ts.restart(self._screen)
 
     def _step(self, action):
         reward = 0
@@ -77,15 +76,14 @@ class EnvironmentSimulator(py_environment.PyEnvironment):
         # TODO
         aid = actions[action]
         observation, reward, done, info = self._gym_env.step(aid)
-        # print('o:{}, r:{},d:{},i:{}'.format(observation, reward, done, info))
-        _screen_state = np.reshape(observation, (16,13,1))
+        _screen_state = np.array(observation[:, :, np.newaxis], dtype=np.float32)
 
         if done and info['life'] == 0:
             # killed
-            reward = 0
-            return ts.termination(np.array(_screen_state, dtype=np.float32), reward=reward)
+            reward = reward - 10
+            return ts.termination(_screen_state, reward=reward)
         else:
-            return ts.transition(np.array(_screen_state, dtype=np.float32), reward=reward, discount=1)
+            return ts.transition(_screen_state, reward=reward, discount=1)
 
 
 
@@ -100,8 +98,8 @@ class QNetwork(network.Network):
 
         self.model = keras.Sequential(
             [
-                keras.layers.Conv2D(16, 3, 1, activation='relu', padding='same'),
-                keras.layers.Conv2D(64, 3, 1, activation='relu', padding='same'),
+                keras.layers.Conv2D(16, 3, activation='relu', padding='same'),
+                keras.layers.Conv2D(64, 3, activation='relu', padding='same'),
                 keras.layers.Flatten(),
                 keras.layers.Dense(n_action),
             ]
@@ -283,7 +281,7 @@ def main():
 
             print(f'* Episode:{episode:4.0f}, Step:{t:3.0f}, R:{episode_rewards:3.0f}, AL:{np.mean(episode_average_loss):.4f}, PE:{policy._epsilon:.6f}')
             train_checkpointer.save(global_step=agent.train_step_counter)
-            if episode%10 == 0:
+            if episode > 0 and episode%10 == 0:
                 tf_policy_saver.save(export_dir='policy%08d' % episode)
         # if args.replay:
         #     replay(args)
