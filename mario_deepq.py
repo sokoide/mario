@@ -148,11 +148,13 @@ def play_mario(env, gene):
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='GA Mario resolver')
+    parser = argparse.ArgumentParser(description='Deep Q lerning  Mario resolver')
     parser.add_argument('--replay', action=argparse.BooleanOptionalAction,
                         help='replay the best one in the generation')
     parser.add_argument('--kill', action=argparse.BooleanOptionalAction,
                         help='kill fceux processes')
+    parser.add_argument('--continue', dest='cont', action=argparse.BooleanOptionalAction,
+                        help='continue learning from the latest checkpoint')
     parser.add_argument('--stage', dest='stage', type=str, default='ppaquette/SuperMarioBros-1-1-Tiles-v0',
                         help='stage (default: ppaquette/SuperMarioBros-1-1-Tiles-v0 )')
     args = parser.parse_args()
@@ -219,28 +221,41 @@ def main():
     ).prefetch(tf.data.experimental.AUTOTUNE)
     iterator = iter(dataset)
 
-    # data
-    print('* data')
     env.reset()
-    driver = dynamic_episode_driver.DynamicEpisodeDriver(
-      env,
-      policy,
-      observers=[replay_buffer.add_batch],
-      num_episodes = 10,
-    )
-    print('* driver.run')
-    driver.run(maximum_iterations=100)
-    print('* driver.run completed')
 
-    num_episodes = 100
+    # check pointer
+    train_checkpointer = common.Checkpointer(
+      ckpt_dir='checkpointer',
+      max_to_keep=3,
+      agent=agent,
+      policy=agent.policy,
+      replay_buffer=replay_buffer,
+      global_step=agent.train_step_counter
+    )
+    if args.cont:
+        print('resotoring checkopoint...')
+        train_checkpointer.initialize_or_restore()
+        print('checkopoint restored')
+    else:
+        # data
+        print('* data')
+        driver = dynamic_episode_driver.DynamicEpisodeDriver(
+          env,
+          policy,
+          observers=[replay_buffer.add_batch],
+          num_episodes = 10,
+        )
+        print('* driver.run')
+        driver.run(maximum_iterations=100)
+        print('* driver.run completed')
+
+    num_episodes = 1000
     epsilon = np.linspace(start=0.2, stop=0.0, num=num_episodes+1)#ε-greedy法用
     tf_policy_saver = policy_saver.PolicySaver(policy=agent.policy)#ポリシーの保存設定
 
     print('* episodes')
-    st = 0
     try:
-        # for episode in range(num_episodes):
-        for episode in range(st, st+num_episodes):
+        for episode in range(num_episodes):
             episode_rewards = 0#報酬の計算用
             episode_average_loss = []#lossの計算用
             policy._epsilon = epsilon[episode]#エピソードに合わせたランダム行動の確率
@@ -267,7 +282,9 @@ def main():
                 time_step = next_time_step#次の状態を今の状態に設定
 
             print(f'* Episode:{episode:4.0f}, Step:{t:3.0f}, R:{episode_rewards:3.0f}, AL:{np.mean(episode_average_loss):.4f}, PE:{policy._epsilon:.6f}')
-            tf_policy_saver.save(export_dir='policy%08d' % episode)
+            train_checkpointer.save(global_step=agent.train_step_counter)
+            if episode%10 == 0:
+                tf_policy_saver.save(export_dir='policy%08d' % episode)
         # if args.replay:
         #     replay(args)
         #     return
