@@ -40,6 +40,7 @@ actions = [
 episode_distance = 0
 max_distance = 0
 debug = False
+FRAMES = 4
 
 class EnvironmentSimulator(py_environment.PyEnvironment):
     def __init__(self, args):
@@ -59,6 +60,8 @@ class EnvironmentSimulator(py_environment.PyEnvironment):
         self._screen = np.zeros(shape=(13, 16, 1), dtype=np.float32)
         self._args = args
         self._gym_env = None
+        self._prev_score = 0
+        self._prev_status = 0
         self._reset()
 
     def __del__(self):
@@ -80,6 +83,9 @@ class EnvironmentSimulator(py_environment.PyEnvironment):
         if self._gym_env is not None:
             self._gym_env.close()
         clean_fceux()
+
+        self._prev_score = 0
+        self._prev_status = 0
         self._gym_env = gym.make(self._args.stage)
         self._gym_env.reset()
 
@@ -95,6 +101,14 @@ class EnvironmentSimulator(py_environment.PyEnvironment):
         episode_distance =  max(episode_distance, int(info['distance']))
         max_distance =  max(max_distance, int(info['distance']))
 
+        reward = reward + (int(info['score']) - self._prev_score)//10;
+
+        if int(info['player_status']) == 0 and self._prev_status == 1:
+            reward -= 100
+
+        self._prev_score = int(info['score'])
+        self._prev_status = int(info['player_status'])
+
         if done and info['life'] == 0:
             # killed
             reward = -100
@@ -103,18 +117,19 @@ class EnvironmentSimulator(py_environment.PyEnvironment):
             return ts.termination(_screen_state, reward=reward)
         elif done:
             # cleared
-            reward += 100
+            reward += 1000
             if debug:
                 print('r:{}'.format(reward))
             return ts.termination(_screen_state, reward=reward)
         else:
             if debug:
-                print('r:{},'.format(reward), end='')
+                # print('r:{},'.format(reward), end='')
+                print('r:{}, info:{}'.format(reward, info))
             return ts.transition(_screen_state, reward=reward, discount=1)
 
 
 class QNetwork(network.Network):
-    def __init__(self, observation_spec, action_spec, n_hidden_channels=2, name='QNetwork'):
+    def __init__(self, observation_spec, action_spec, name='QNetwork'):
         super(QNetwork, self).__init__(
             input_tensor_spec=observation_spec,
             state_spec=(),
@@ -131,6 +146,9 @@ class QNetwork(network.Network):
                 keras.layers.Conv2D(64, kernel_size=(3,3), strides=(1,1), padding='same', activation='relu'),
                 keras.layers.MaxPool2D(pool_size=(2, 2)),
                 keras.layers.Flatten(),
+                keras.layers.Dense(64),
+                keras.layers.Dense(16),
+                keras.layers.Dropout(0.5),
                 keras.layers.Dense(n_action, activation='softmax'),
             ]
         )
@@ -181,8 +199,7 @@ def parse_args():
 
 
 def replay(policy, env):
-    FRAMES = 4
-    # 1000 steps == 400 TIME periods in Mario
+    # 1000 steps * 4 (FRAMES) == 400 TIME periods in Mario
     NUM_STEPS = 1000 * FRAMES
     episode_rewards = 0
 
@@ -205,8 +222,7 @@ def replay(policy, env):
 
 
 def main():
-    FRAMES = 4
-    # 1000 steps == 400 TIME periods in Mario
+    # 1000 steps * 4 (FRAMES) == 400 TIME periods in Mario
     NUM_STEPS = 1000 * FRAMES
 
     args = parse_args()
@@ -229,7 +245,7 @@ def main():
         n_step_update=n_step_update,
         epsilon_greedy=1.0,
         target_update_tau=1.0,
-        target_update_period=10,
+        target_update_period=32,
         gamma=0.9,
         td_errors_loss_fn = common.element_wise_squared_loss,
         train_step_counter = tf.Variable(0)
@@ -284,7 +300,7 @@ def main():
           num_episodes = 10,
         )
         print('* driver.run')
-        driver.run(maximum_iterations=80)
+        driver.run(maximum_iterations=50)
         print('* driver.run completed')
 
     num_episodes = args.episodes
