@@ -156,21 +156,34 @@ def parse_args():
                         help='stage (default: ppaquette/SuperMarioBros-1-1-Tiles-v0 )')
     parser.add_argument('--episodes', dest='episodes', type=int, default=1000,
                         help='number of episodes')
+    parser.add_argument('--policy', dest='policy', type=int, default=-1,
+                        help='saved policy number to replay')
     args = parser.parse_args()
     return args
 
 
-def replay(args):
-    pass
-    # l = sorted(genes, key=lambda k: k['score'])
-    # first = l[-1]
-    # print(first)
-    # print('len:{}'.format(len(first['gene'])))
-    # env = gym.make(args.stage)
-    # score, cleared = play_mario(env, first['gene'])
-    # print('score: {}, cleared: {}'.format(score, cleared))
-    # clean_fceux()
-    # env.close()
+def replay(policy, env):
+    FRAMES = 4
+    # 1000 steps == 400 TIME periods in Mario
+    NUM_STEPS = 1000 * FRAMES
+    episode_rewards = 0
+
+    time_step = env.reset()
+    for t in range(NUM_STEPS):
+        policy_step = policy.action(time_step)
+        for i in range(FRAMES):
+            next_time_step = env.step(policy_step.action)
+            if next_time_step.is_last()[0]:
+                break
+        S = time_step.observation.numpy().tolist()[0]
+        A = policy_step.action.numpy().tolist()[0]
+        R = next_time_step.reward.numpy().astype('int').tolist()[0]
+        print('A:{}, R:{}'.format(A, R))
+        episode_rewards += R
+
+        time_step = next_time_step
+    print(f'Rewards:{episode_rewards}')
+    env.close()
 
 
 def main():
@@ -199,7 +212,7 @@ def main():
         epsilon_greedy=1.0,
         target_update_tau=1.0,
         target_update_period=10,
-        gamma=0.8,
+        gamma=0.9,
         td_errors_loss_fn = common.element_wise_squared_loss,
         train_step_counter = tf.Variable(0)
       )
@@ -207,6 +220,12 @@ def main():
     agent.train = common.function(agent.train)
 
     # policy
+    if args.policy >= 0:
+        policy_dir = 'policy%08d' % args.policy
+        policy = tf.compat.v2.saved_model.load(policy_dir)
+        replay(policy, env)
+        return
+
     policy = agent.collect_policy
 
     replay_buffer = tf_uniform_replay_buffer.TFUniformReplayBuffer(
@@ -251,12 +270,12 @@ def main():
         print('* driver.run completed')
 
     num_episodes = args.episodes
-    epsilon = np.linspace(start=0.2, stop=0.0, num=num_episodes+1)
+    epsilon = np.linspace(start=0.5, stop=0.0, num=num_episodes+1)
     tf_policy_saver = policy_saver.PolicySaver(policy=agent.policy)
 
     print('* episodes')
     try:
-        for episode in range(num_episodes):
+        for episode in range(1, num_episodes+1):
             episode_rewards = 0
             episode_average_loss = []
             policy._epsilon = epsilon[episode]
@@ -284,7 +303,7 @@ def main():
 
                 time_step = next_time_step
 
-            print(f'* Episode:{episode:4.0f}/{num_episodes:d}, MaxDistance:{max_distance:d}, Distance:{episode_distance:d}, Step:{t:3.0f}, R:{episode_rewards:3.0f}, AL:{np.mean(episode_average_loss):.4f}, PE:{policy._epsilon:.6f}')
+            print(f'* Episode:{episode:4.0f}/{num_episodes:d}, Epsilon:{policy._epsilon:.2f}, MaxDistance:{max_distance:d}, Distance:{episode_distance:d}, Step:{t:3.0f}, R:{episode_rewards:3.0f}, AL:{np.mean(episode_average_loss):.4f}, PE:{policy._epsilon:.6f}')
             train_checkpointer.save(global_step=agent.train_step_counter)
             if episode > 0 and episode%10 == 0:
                 tf_policy_saver.save(export_dir='policy%08d' % episode)
