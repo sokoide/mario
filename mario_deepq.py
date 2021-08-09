@@ -39,6 +39,7 @@ actions = [
 ]
 episode_distance = 0
 max_distance = 0
+debug = False
 
 class EnvironmentSimulator(py_environment.PyEnvironment):
     def __init__(self, args):
@@ -83,27 +84,27 @@ class EnvironmentSimulator(py_environment.PyEnvironment):
         global max_distance
         global episode_distance
 
-        aid = actions[action]
-        observation, reward, done, info = self._gym_env.step(aid)
+        a = actions[action]
+        observation, reward, done, info = self._gym_env.step(a)
         _screen_state = np.array(observation[:, :, np.newaxis], dtype=np.float32)
         episode_distance =  max(episode_distance, int(info['distance']))
         max_distance =  max(max_distance, int(info['distance']))
 
-        if reward==0:
-            reward = -1
-
         if done and info['life'] == 0:
             # killed
             reward = -100
-            # print('r:{}'.format(reward))
+            if debug:
+                print('r:{}'.format(reward))
             return ts.termination(_screen_state, reward=reward)
         elif done:
             # cleared
             reward += 100
-            # print('r:{}'.format(reward))
+            if debug:
+                print('r:{}'.format(reward))
             return ts.termination(_screen_state, reward=reward)
         else:
-            # print('r:{},'.format(reward), end='')
+            if debug:
+                print('r:{},'.format(reward), end='')
             return ts.transition(_screen_state, reward=reward, discount=1)
 
 
@@ -118,11 +119,11 @@ class QNetwork(network.Network):
 
         self.model = keras.Sequential(
             [
-                keras.layers.Conv2D(16, 3, 1, activation='relu', padding='same'),
+                keras.layers.Conv2D(16, (3,3), strides=(1,1), input_shape=(13,16,1),activation='relu', padding='same'),
                 keras.layers.MaxPool2D(pool_size=(2, 2)),
-                keras.layers.Conv2D(32, 3, 1, activation='relu', padding='same'),
+                keras.layers.Conv2D(32, (3,3), strides=(1,1), input_shape=(13,16,1),activation='relu', padding='same'),
                 keras.layers.MaxPool2D(pool_size=(2, 2)),
-                keras.layers.Conv2D(64, 3, 1, activation='relu', padding='same'),
+                keras.layers.Conv2D(64, (3,3), strides=(1,1), input_shape=(13,16,1),activation='relu', padding='same'),
                 keras.layers.MaxPool2D(pool_size=(2, 2)),
                 keras.layers.Flatten(),
                 keras.layers.Dense(n_action),
@@ -151,6 +152,8 @@ def clean_fceux():
 
 
 def parse_args():
+    global debug
+
     parser = argparse.ArgumentParser(description='Deep Q lerning  Mario resolver')
     parser.add_argument('--replay', action=argparse.BooleanOptionalAction,
                         help='replay the best one in the generation')
@@ -164,7 +167,11 @@ def parse_args():
                         help='number of episodes')
     parser.add_argument('--policy', dest='policy', type=int, default=-1,
                         help='saved policy number to replay')
+    parser.add_argument('--debug', default=False, action=argparse.BooleanOptionalAction,
+                        help='debug mode')
     args = parser.parse_args()
+    debug = args.debug
+
     return args
 
 
@@ -313,6 +320,7 @@ def main():
             train_checkpointer.save(global_step=agent.train_step_counter)
             if episode > 0 and episode%10 == 0:
                 tf_policy_saver.save(export_dir='policy%08d' % episode)
+            env.close()
     except KeyboardInterrupt:
         clean_fceux()
 
