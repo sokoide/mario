@@ -89,15 +89,21 @@ class EnvironmentSimulator(py_environment.PyEnvironment):
         episode_distance =  max(episode_distance, int(info['distance']))
         max_distance =  max(max_distance, int(info['distance']))
 
+        if reward==0:
+            reward = -1
+
         if done and info['life'] == 0:
             # killed
-            reward - 100
+            reward = -100
+            # print('r:{}'.format(reward))
             return ts.termination(_screen_state, reward=reward)
         elif done:
             # cleared
             reward += 100
+            # print('r:{}'.format(reward))
             return ts.termination(_screen_state, reward=reward)
         else:
+            # print('r:{},'.format(reward), end='')
             return ts.transition(_screen_state, reward=reward, discount=1)
 
 
