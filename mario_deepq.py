@@ -37,11 +37,15 @@ actions = [
     [0, 0, 0, 0, 1, 0],  # jump
     [0, 1, 0, 0,  0, 0],  # left
 ]
+episode_distance = 0
 max_distance = 0
 
 class EnvironmentSimulator(py_environment.PyEnvironment):
     def __init__(self, args):
+        global max_distance
+
         super(EnvironmentSimulator, self).__init__()
+        max_distance = 0
         # state
         # 0: empty, 1: wall, 2: enemy, 3: mario
         self._observation_spec = array_spec.BoundedArraySpec(
@@ -64,7 +68,8 @@ class EnvironmentSimulator(py_environment.PyEnvironment):
 
     def _reset(self):
         global max_distance
-        max_distance = 0
+        global episode_distance
+        episode_distance = 0
 
         if self._gym_env is not None:
             self._gym_env.close()
@@ -76,14 +81,17 @@ class EnvironmentSimulator(py_environment.PyEnvironment):
 
     def _step(self, action):
         global max_distance
+        global episode_distance
+
         aid = actions[action]
         observation, reward, done, info = self._gym_env.step(aid)
         _screen_state = np.array(observation[:, :, np.newaxis], dtype=np.float32)
+        episode_distance =  max(episode_distance, int(info['distance']))
         max_distance =  max(max_distance, int(info['distance']))
 
         if done and info['life'] == 0:
             # killed
-            reward = - 100
+            reward - 100
             return ts.termination(_screen_state, reward=reward)
         elif done:
             # cleared
@@ -104,11 +112,11 @@ class QNetwork(network.Network):
 
         self.model = keras.Sequential(
             [
-                keras.layers.Conv2D(16, 3, activation='relu', padding='same'),
+                keras.layers.Conv2D(16, 3, 1, activation='relu', padding='same'),
                 keras.layers.MaxPool2D(pool_size=(2, 2)),
-                keras.layers.Conv2D(32, 3, activation='relu', padding='same'),
+                keras.layers.Conv2D(32, 3, 1, activation='relu', padding='same'),
                 keras.layers.MaxPool2D(pool_size=(2, 2)),
-                keras.layers.Conv2D(64, 3, activation='relu', padding='same'),
+                keras.layers.Conv2D(64, 3, 1, activation='relu', padding='same'),
                 keras.layers.MaxPool2D(pool_size=(2, 2)),
                 keras.layers.Flatten(),
                 keras.layers.Dense(n_action),
@@ -146,6 +154,8 @@ def parse_args():
                         help='continue learning from the latest checkpoint')
     parser.add_argument('--stage', dest='stage', type=str, default='ppaquette/SuperMarioBros-1-1-Tiles-v0',
                         help='stage (default: ppaquette/SuperMarioBros-1-1-Tiles-v0 )')
+    parser.add_argument('--episodes', dest='episodes', type=int, default=1000,
+                        help='number of episodes')
     args = parser.parse_args()
     return args
 
@@ -164,9 +174,9 @@ def replay(args):
 
 
 def main():
-    # 1000 steps == 400 TIME periods in Mario
-    NUM_STEPS = 1000
     FRAMES = 4
+    # 1000 steps == 400 TIME periods in Mario
+    NUM_STEPS = 1000 * FRAMES
 
     args = parse_args()
 
@@ -177,6 +187,7 @@ def main():
     py_env = EnvironmentSimulator(args)
     env = tf_py_environment.TFPyEnvironment(py_env)
     primary_network = QNetwork(env.observation_spec(), env.action_spec())
+
     # agent
     n_step_update = 1
     agent = dqn_agent.DqnAgent(
@@ -188,7 +199,7 @@ def main():
         epsilon_greedy=1.0,
         target_update_tau=1.0,
         target_update_period=10,
-        gamma=0.9,
+        gamma=0.8,
         td_errors_loss_fn = common.element_wise_squared_loss,
         train_step_counter = tf.Variable(0)
       )
@@ -221,6 +232,7 @@ def main():
       replay_buffer=replay_buffer,
       global_step=agent.train_step_counter
     )
+
     if args.cont:
         print('resotoring checkopoint...')
         train_checkpointer.initialize_or_restore()
@@ -235,10 +247,10 @@ def main():
           num_episodes = 10,
         )
         print('* driver.run')
-        driver.run(maximum_iterations=100)
+        driver.run(maximum_iterations=80)
         print('* driver.run completed')
 
-    num_episodes = 1000
+    num_episodes = args.episodes
     epsilon = np.linspace(start=0.2, stop=0.0, num=num_episodes+1)
     tf_policy_saver = policy_saver.PolicySaver(policy=agent.policy)
 
@@ -272,7 +284,7 @@ def main():
 
                 time_step = next_time_step
 
-            print(f'* Episode:{episode:4.0f}, Distance:{max_distance:d}, Step:{t:3.0f}, R:{episode_rewards:3.0f}, AL:{np.mean(episode_average_loss):.4f}, PE:{policy._epsilon:.6f}')
+            print(f'* Episode:{episode:4.0f}/{num_episodes:d}, MaxDistance:{max_distance:d}, Distance:{episode_distance:d}, Step:{t:3.0f}, R:{episode_rewards:3.0f}, AL:{np.mean(episode_average_loss):.4f}, PE:{policy._epsilon:.6f}')
             train_checkpointer.save(global_step=agent.train_step_counter)
             if episode > 0 and episode%10 == 0:
                 tf_policy_saver.save(export_dir='policy%08d' % episode)
