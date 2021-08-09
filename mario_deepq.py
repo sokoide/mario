@@ -50,7 +50,7 @@ class EnvironmentSimulator(py_environment.PyEnvironment):
         # state
         # 0: empty, 1: wall, 2: enemy, 3: mario
         self._observation_spec = array_spec.BoundedArraySpec(
-            shape=(13, 16, 1), dtype=np.float32, minimum=0, maximum=3
+            shape=(13, 16, 1), dtype=np.float32, minimum=0.0, maximum=3.0
         )
         # action
         self._action_spec = array_spec.BoundedArraySpec(
@@ -124,14 +124,14 @@ class QNetwork(network.Network):
 
         self.model = keras.Sequential(
             [
-                keras.layers.Conv2D(filters=16, kernel_size=(3,3), strides=(1,1), input_shape=(13,16,1),activation='relu', padding='same'),
+                keras.layers.Conv2D(16, kernel_size=(3,3), strides=(1,1), input_shape=(13,16,1),padding='same', activation='relu'),
                 keras.layers.MaxPool2D(pool_size=(2, 2)),
-                keras.layers.Conv2D(filters=32, kernel_size=(3,3), strides=(1,1), activation='relu', padding='same'),
+                keras.layers.Conv2D(32, kernel_size=(3,3), strides=(1,1), padding='same', activation='relu'),
                 keras.layers.MaxPool2D(pool_size=(2, 2)),
-                keras.layers.Conv2D(filters=64, kernel_size=(3,3), strides=(1,1), activation='relu', padding='same'),
+                keras.layers.Conv2D(64, kernel_size=(3,3), strides=(1,1), padding='same', activation='relu'),
                 keras.layers.MaxPool2D(pool_size=(2, 2)),
                 keras.layers.Flatten(),
-                keras.layers.Dense(n_action),
+                keras.layers.Dense(n_action, activation='softmax'),
             ]
         )
 
