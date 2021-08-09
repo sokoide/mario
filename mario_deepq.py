@@ -61,6 +61,11 @@ class EnvironmentSimulator(py_environment.PyEnvironment):
         self._gym_env = None
         self._reset()
 
+    def __del__(self):
+        if self._gym_env is not None:
+            self._gym_env.close()
+
+
     def observation_spec(self):
         return self._observation_spec
 
