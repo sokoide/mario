@@ -124,11 +124,11 @@ class QNetwork(network.Network):
 
         self.model = keras.Sequential(
             [
-                keras.layers.Conv2D(16, (3,3), strides=(1,1), input_shape=(13,16,1),activation='relu', padding='same'),
+                keras.layers.Conv2D(filters=16, kernel_size=(3,3), strides=(1,1), input_shape=(13,16,1),activation='relu', padding='same'),
                 keras.layers.MaxPool2D(pool_size=(2, 2)),
-                keras.layers.Conv2D(32, (3,3), strides=(1,1), input_shape=(13,16,1),activation='relu', padding='same'),
+                keras.layers.Conv2D(filters=32, kernel_size=(3,3), strides=(1,1), activation='relu', padding='same'),
                 keras.layers.MaxPool2D(pool_size=(2, 2)),
-                keras.layers.Conv2D(64, (3,3), strides=(1,1), input_shape=(13,16,1),activation='relu', padding='same'),
+                keras.layers.Conv2D(filters=64, kernel_size=(3,3), strides=(1,1), activation='relu', padding='same'),
                 keras.layers.MaxPool2D(pool_size=(2, 2)),
                 keras.layers.Flatten(),
                 keras.layers.Dense(n_action),
@@ -325,7 +325,7 @@ def main():
             train_checkpointer.save(global_step=agent.train_step_counter)
             if episode > 0 and episode%10 == 0:
                 tf_policy_saver.save(export_dir='policy%08d' % episode)
-            env.close()
+        env.close()
     except KeyboardInterrupt:
         clean_fceux()
 
