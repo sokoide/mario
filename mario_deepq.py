@@ -37,6 +37,7 @@ actions = [
     [0, 0, 0, 0, 1, 0],  # jump
     [0, 1, 0, 0,  0, 0],  # left
 ]
+max_distance = 0
 
 class EnvironmentSimulator(py_environment.PyEnvironment):
     def __init__(self, args):
@@ -62,6 +63,9 @@ class EnvironmentSimulator(py_environment.PyEnvironment):
         return self._action_spec
 
     def _reset(self):
+        global max_distance
+        max_distance = 0
+
         if self._gym_env is not None:
             self._gym_env.close()
         clean_fceux()
@@ -71,20 +75,22 @@ class EnvironmentSimulator(py_environment.PyEnvironment):
         return ts.restart(self._screen)
 
     def _step(self, action):
-        reward = 0
-
-        # TODO
+        global max_distance
         aid = actions[action]
         observation, reward, done, info = self._gym_env.step(aid)
         _screen_state = np.array(observation[:, :, np.newaxis], dtype=np.float32)
+        max_distance =  max(max_distance, int(info['distance']))
 
         if done and info['life'] == 0:
             # killed
-            reward = reward - 10
+            reward = - 100
+            return ts.termination(_screen_state, reward=reward)
+        elif done:
+            # cleared
+            reward += 100
             return ts.termination(_screen_state, reward=reward)
         else:
             return ts.transition(_screen_state, reward=reward, discount=1)
-
 
 
 class QNetwork(network.Network):
@@ -99,7 +105,11 @@ class QNetwork(network.Network):
         self.model = keras.Sequential(
             [
                 keras.layers.Conv2D(16, 3, activation='relu', padding='same'),
+                keras.layers.MaxPool2D(pool_size=(2, 2)),
+                keras.layers.Conv2D(32, 3, activation='relu', padding='same'),
+                keras.layers.MaxPool2D(pool_size=(2, 2)),
                 keras.layers.Conv2D(64, 3, activation='relu', padding='same'),
+                keras.layers.MaxPool2D(pool_size=(2, 2)),
                 keras.layers.Flatten(),
                 keras.layers.Dense(n_action),
             ]
@@ -124,25 +134,6 @@ def clean_fceux():
     kill_process(os.path.join(hb_prefix, 'bin/fceux'))
     kill_process(os.path.join(hb_prefix, 'Cellar/fceux/2.4.0/libexec/fceux'))
 
-
-
-def play_mario(env, gene):
-    # returns (score, cleared)
-    FRAMES = 4
-    score = 0
-    observation = env.reset()
-
-    for action_id in gene:
-        for i in range(FRAMES):
-            action = actions[action_id]
-            observation, reward, done, info = env.step(action)
-            # print('r:{}, d:{}, i:{}'.format(reward, done, info))
-            score = max(score, info['distance'])
-            if done and info['life'] == 0:
-                return (score, False)
-            elif done:
-                return (score, True)
-    return (score, False)
 
 
 def parse_args():
@@ -248,27 +239,29 @@ def main():
         print('* driver.run completed')
 
     num_episodes = 1000
-    epsilon = np.linspace(start=0.2, stop=0.0, num=num_episodes+1)#ε-greedy法用
-    tf_policy_saver = policy_saver.PolicySaver(policy=agent.policy)#ポリシーの保存設定
+    epsilon = np.linspace(start=0.2, stop=0.0, num=num_episodes+1)
+    tf_policy_saver = policy_saver.PolicySaver(policy=agent.policy)
 
     print('* episodes')
     try:
         for episode in range(num_episodes):
-            episode_rewards = 0#報酬の計算用
-            episode_average_loss = []#lossの計算用
-            policy._epsilon = epsilon[episode]#エピソードに合わせたランダム行動の確率
-            time_step = env.reset()#環境の初期化
+            episode_rewards = 0
+            episode_average_loss = []
+            policy._epsilon = epsilon[episode]
+            time_step = env.reset()
 
             for t in range(NUM_STEPS):
-                policy_step = policy.action(time_step)#状態から行動の決定
+                policy_step = policy.action(time_step)
                 for i in range(FRAMES):
-                    next_time_step = env.step(policy_step.action)#行動による状態の遷移
+                    next_time_step = env.step(policy_step.action)
+                    if next_time_step.is_last()[0]:
+                        break
 
-                traj =  trajectory.from_transition(time_step, policy_step, next_time_step)#データの生成
-                replay_buffer.add_batch(traj)#データの保存
+                traj =  trajectory.from_transition(time_step, policy_step, next_time_step)
+                replay_buffer.add_batch(traj)
 
-                experience, _ = next(iterator)#学習用データの呼び出し
-                loss_info = agent.train(experience=experience)#学習
+                experience, _ = next(iterator)
+                loss_info = agent.train(experience=experience)
 
                 R = next_time_step.reward.numpy().astype('int').tolist()[0]
                 episode_average_loss.append(loss_info.loss.numpy())
@@ -277,34 +270,12 @@ def main():
                 if next_time_step.is_last()[0]:
                     break
 
-                time_step = next_time_step#次の状態を今の状態に設定
+                time_step = next_time_step
 
-            print(f'* Episode:{episode:4.0f}, Step:{t:3.0f}, R:{episode_rewards:3.0f}, AL:{np.mean(episode_average_loss):.4f}, PE:{policy._epsilon:.6f}')
+            print(f'* Episode:{episode:4.0f}, Distance:{max_distance:d}, Step:{t:3.0f}, R:{episode_rewards:3.0f}, AL:{np.mean(episode_average_loss):.4f}, PE:{policy._epsilon:.6f}')
             train_checkpointer.save(global_step=agent.train_step_counter)
             if episode > 0 and episode%10 == 0:
                 tf_policy_saver.save(export_dir='policy%08d' % episode)
-        # if args.replay:
-        #     replay(args)
-        #     return
-        #
-        # cleared = False
-        # while cleared == False:
-        #     pass
-            # print('[{}] * generation: {}'.format(time.strftime('%H:%M:%S'), gen))
-            # for gene in genes:
-            #     if gene['score'] > 0:
-            #         print('result: {} (prev)'.format(gene['score']))
-            #         continue
-            #     # recreate env every episode to avoid 5-7 second dealy at start up after Mario is killed by Kuribo
-            #     env = gym.make(args.stage)
-            #     gene['score'], cleared = play_mario(env, gene['gene'])
-            #     print('score: {}, cleared: {}'.format(gene['score'], cleared))
-            #     clean_fceux()
-            #     env.close()
-            # print_generation_result(gen)
-            # save_genes(gen)
-            # change_generation()
-            # gen += 1
     except KeyboardInterrupt:
         clean_fceux()
 
