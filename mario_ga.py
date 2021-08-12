@@ -24,6 +24,9 @@ actions = [
     [0, 1, 0, 0,  0, 0],  # left
 ]
 
+NUM_GENES = 10
+NUM_STEPS = 1000  # 1000 steps == 400 TIME periods in Mario
+
 
 def kill_process(path: str):
     for line in os.popen("ps -ef | grep '{}' | grep -v grep".format(path)):
@@ -81,11 +84,11 @@ def change_generation():
 
     new_genes = []
 
-    # keep the best X
+    # DNA 1-2: keep the best 2
     new_genes.append(first)
     new_genes.append(second)
 
-    # mutate the best one
+    # DNA 3-4: mutate the best one
     for i in range(2):
         new_gene = copy.deepcopy(first['gene'])
         for i in range(0, len(new_gene)//100):
@@ -93,7 +96,7 @@ def change_generation():
             new_gene[r] = np.random.randint(0, len(actions))
         new_genes.append({'gene': new_gene, 'score': 0})
 
-    # cross over
+    # DNA 5-10: crossover
     for i in range(len(genes)-len(new_genes)):
         p = np.random.randint(0, len(first['gene']))
         r = np.random.randint(1, 5)
@@ -103,7 +106,7 @@ def change_generation():
         new_gene = s1['gene'][:p] + s2['gene'][p:]
         new_genes.append({'gene': new_gene, 'score': 0})
 
-    # mutete
+    # then mutate
     for i in range(3, len(new_genes)):
         gene = new_genes[i]['gene']
         for j in range(0, len(gene)//100):
@@ -165,9 +168,6 @@ def replay(args):
 
 def main():
     global genes
-    NUM_GENES = 10
-    # 1000 steps == 400 TIME periods in Mario
-    NUM_STEPS = 1000
 
     args = parse_args()
 
